@@ -28,35 +28,37 @@ let selectedPlayer = null;
 let lastPlatformX = 0;
 let lastPlatformY = 0;
 let lastDirectionUp = false;
+let isClickingLeft = false;  // Added: Tracks left-side click/tap
+let isClickingRight = false; // Added: Tracks right-side click/tap
 
 const playerStartX = 400;
 const playerStartY = 450;
 
-const maxVisiblePlatforms = 9;
-const maxVisibleTokens = 7;
+const maxVisiblePlatforms = 10;
+const maxVisibleTokens = 8;
 
 const maxJumpHeight = 150;
-const minPlatformSpacingX = 120; // Reduced from 150 to 120
-const maxPlatformSpacingX = 220; // Reduced from 250 to 220
+const minPlatformSpacingX = 120;
+const maxPlatformSpacingX = 220;
 
 const minPlatformY = 150;
-const maxPlatformY = 550; // Reduced from 350 to 300
+const maxPlatformY = 550;
 const verticalStepMin = 50;
-const verticalStepMax = 180; // Increased from 150 to 180
+const verticalStepMax = 180;
 const overlapBuffer = 20;
 const minTokenSpacingY = 50;
 
 function preload() {
-    this.load.image('platform_small', 'https://cdn.prod.website-files.com/63dd8197e6a5692dcee334af/67ce535eac2c7e70823e7bbc_junker_small.png');
+    this.load.image('platform_small', 'assets/obstacles/junker_small.png');
     console.log('Loading platform_small from assets/obstacles/junker_small.png');
-    this.load.image('platform_medium', 'https://cdn.prod.website-files.com/63dd8197e6a5692dcee334af/67ce535ec6c98590784d282f_junker_medium.png');
+    this.load.image('platform_medium', 'assets/obstacles/junker_medium.png');
     console.log('Loading platform_medium from assets/obstacles/junker_medium.png');
-    this.load.image('platform_large', 'https://cdn.prod.website-files.com/63dd8197e6a5692dcee334af/67ce535e402a352f4c5d7c96_junker_large.png');
+    this.load.image('platform_large', 'assets/obstacles/junker_large.png');
     console.log('Loading platform_large from assets/obstacles/junker_large.png');
-    this.load.image('token', 'https://cdn.prod.website-files.com/63dd8197e6a5692dcee334af/67ce5360b77d31d5d204e0e4_Token.png');
-    this.load.image('obstacle', 'https://cdn.prod.website-files.com/63dd8197e6a5692dcee334af/67ce535e140811ef92d652c6_obstacle.png');
-    this.load.spritesheet('geartickler', 'https://cdn.prod.website-files.com/63dd8197e6a5692dcee334af/67ce536724d3407817f517c3_geartickler.png', { frameWidth: 48, frameHeight: 48 });
-    this.load.spritesheet('kyle', 'https://cdn.prod.website-files.com/63dd8197e6a5692dcee334af/67ce53677107c3c15a6c7b2e_kyle.png', { frameWidth: 48, frameHeight: 48 });
+    this.load.image('token', 'assets/obstacles/token.png');
+    this.load.image('obstacle', 'assets/obstacles/obstacle.png');
+    this.load.spritesheet('geartickler', 'assets/characters/geartickler.png', { frameWidth: 48, frameHeight: 48 });
+    this.load.spritesheet('kyle', 'assets/characters/kyle.png', { frameWidth: 48, frameHeight: 48 });
 }
 
 function generateInitialPlatforms(scene) {
@@ -72,22 +74,19 @@ function generateInitialPlatforms(scene) {
 }
 
 function generatePlatform(scene, xPosition) {
-    // Alternate up and down from last platform
     let platformY;
-    lastDirectionUp = !lastDirectionUp; // Toggle direction
-    if (lastDirectionUp) { // Up
+    lastDirectionUp = !lastDirectionUp;
+    if (lastDirectionUp) {
         platformY = lastPlatformY - Phaser.Math.Between(verticalStepMin, verticalStepMax);
-    } else { // Down
+    } else {
         platformY = lastPlatformY + Phaser.Math.Between(verticalStepMin, verticalStepMax);
     }
 
-    // Clamp Y to stay within bounds
     platformY = Phaser.Math.Clamp(platformY, minPlatformY, maxPlatformY);
 
     const platformTypes = ['platform_small', 'platform_medium', 'platform_large'];
     const selectedPlatform = Phaser.Utils.Array.GetRandom(platformTypes);
 
-    // Check for overlap with buffer
     let newPlatform;
     let attempts = 0;
     const maxAttempts = 10;
@@ -266,6 +265,23 @@ function startGame(scene) {
         callbackScope: scene,
         loop: true
     });
+
+    // Added: Click/tap controls to mimic cursor movement
+    scene.input.on('pointerdown', (pointer) => {
+        const clickX = pointer.x + scene.cameras.main.scrollX; // Adjust for camera scroll
+        if (clickX < scene.cameras.main.width / 2 + scene.cameras.main.scrollX) {
+            isClickingLeft = true;
+            isClickingRight = false;
+        } else {
+            isClickingRight = true;
+            isClickingLeft = false;
+        }
+    });
+
+    scene.input.on('pointerup', () => {
+        isClickingLeft = false;
+        isClickingRight = false;
+    });
 }
 
 function create() {
@@ -323,14 +339,15 @@ function create() {
 }
 
 function update() {
-    if (!gameStarted || !player || !cursors) return;
+    if (!gameStarted || !player) return; // Modified: Removed !cursors check
 
     if (isHit) return;
 
-    if (cursors.left.isDown) {
+    // Modified: Check both keyboard and click/tap inputs
+    if ((cursors && cursors.left.isDown) || isClickingLeft) {
         player.setVelocityX(-160);
         player.anims.play('move_left', true);
-    } else if (cursors.right.isDown) {
+    } else if ((cursors && cursors.right.isDown) || isClickingRight) {
         player.setVelocityX(160);
         player.anims.play('move_right', true);
     } else {
