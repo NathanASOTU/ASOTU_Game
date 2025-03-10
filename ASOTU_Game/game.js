@@ -47,16 +47,16 @@ const overlapBuffer = 20;
 const minTokenSpacingY = 50;
 
 function preload() {
-    this.load.image('platform_small', 'assets/obstacles/junker_small.png');
+    this.load.image('platform_small', 'https://cdn.prod.website-files.com/63dd8197e6a5692dcee334af/67ce535eac2c7e70823e7bbc_junker_small.png');
     console.log('Loading platform_small from assets/obstacles/junker_small.png');
-    this.load.image('platform_medium', 'assets/obstacles/junker_medium.png');
+    this.load.image('platform_medium', 'https://cdn.prod.website-files.com/63dd8197e6a5692dcee334af/67ce535ec6c98590784d282f_junker_medium.png');
     console.log('Loading platform_medium from assets/obstacles/junker_medium.png');
-    this.load.image('platform_large', 'assets/obstacles/junker_large.png');
+    this.load.image('platform_large', 'https://cdn.prod.website-files.com/63dd8197e6a5692dcee334af/67ce535e402a352f4c5d7c96_junker_large.png');
     console.log('Loading platform_large from assets/obstacles/junker_large.png');
-    this.load.image('token', 'assets/obstacles/token.png');
-    this.load.image('obstacle', 'assets/obstacles/obstacle.png');
-    this.load.spritesheet('geartickler', 'assets/characters/geartickler.png', { frameWidth: 48, frameHeight: 48 });
-    this.load.spritesheet('kyle', 'assets/characters/kyle.png', { frameWidth: 48, frameHeight: 48 });
+    this.load.image('token', 'https://cdn.prod.website-files.com/63dd8197e6a5692dcee334af/67ce5360b77d31d5d204e0e4_Token.png');
+    this.load.image('obstacle', 'https://cdn.prod.website-files.com/63dd8197e6a5692dcee334af/67ce535e140811ef92d652c6_obstacle.png');
+    this.load.spritesheet('geartickler', 'https://cdn.prod.website-files.com/63dd8197e6a5692dcee334af/67ce536724d3407817f517c3_geartickler.png', { frameWidth: 48, frameHeight: 48 });
+    this.load.spritesheet('kyle', 'https://cdn.prod.website-files.com/63dd8197e6a5692dcee334af/67ce53677107c3c15a6c7b2e_kyle.png', { frameWidth: 48, frameHeight: 48 });
 }
 
 function generateInitialPlatforms(scene) {
