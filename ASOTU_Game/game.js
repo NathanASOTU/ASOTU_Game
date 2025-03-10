@@ -23,6 +23,7 @@ const config = {
 
 const game = new Phaser.Game(config);
 
+// Game variables
 let player, cursors, platforms, tokens, obstacles, scoreText;
 let gameStarted = false;
 let score = 0;
@@ -36,16 +37,13 @@ let isClickingRight = false;
 
 const playerStartX = 400;
 const playerStartY = 450;
-
 const maxVisiblePlatforms = 10;
 const maxVisibleTokens = 8;
-
 const maxJumpHeight = 150;
 const minPlatformSpacingX = 120;
 const maxPlatformSpacingX = 220;
-
-const minPlatformY = 150; // As requested
-const maxPlatformY = 550; // As requested
+const minPlatformY = 150;
+const maxPlatformY = 550;
 const verticalStepMin = 50;
 const verticalStepMax = 180;
 const overlapBuffer = 20;
@@ -167,28 +165,44 @@ function hitObstacle(player, obstacle) {
     scoreText.setText('CON Points: ' + score);
 }
 
-function loadLeaderboard() {
-    const leaderboard = localStorage.getItem('asotuConLeaderboard');
-    return leaderboard ? JSON.parse(leaderboard) : [];
+// Firebase Leaderboard Functions
+async function fetchGlobalLeaderboard() {
+    try {
+        const response = await fetch('https://road-to-asotu-con-default-rtdb.firebaseio.com/leaderboard.json', {
+            method: 'GET',
+            headers: { 'Accept': 'application/json' }
+        });
+        if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+        const data = await response.json();
+        console.log('Raw leaderboard data:', data);
+        const leaderboard = data ? Object.values(data).sort((a, b) => b.score - a.score).slice(0, 10) : [];
+        console.log('Processed leaderboard:', leaderboard);
+        return leaderboard;
+    } catch (error) {
+        console.error('Error fetching leaderboard:', error);
+        return [];
+    }
 }
 
-function saveLeaderboard(leaderboard) {
-    localStorage.setItem('asotuConLeaderboard', JSON.stringify(leaderboard));
+async function submitScore(initials, score) {
+    try {
+        const response = await fetch('https://road-to-asotu-con-default-rtdb.firebaseio.com/leaderboard.json', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ initials, score, timestamp: Date.now() })
+        });
+        if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+        console.log('Score submitted successfully:', { initials, score });
+        return true;
+    } catch (error) {
+        console.error('Error submitting score:', error);
+        return false;
+    }
 }
 
-function updateLeaderboard(initials, score) {
-    let leaderboard = loadLeaderboard();
-    leaderboard.push({ initials, score });
-    leaderboard.sort((a, b) => b.score - a.score);
-    leaderboard = leaderboard.slice(0, 10);
-    saveLeaderboard(leaderboard);
-    return leaderboard;
-}
-
-function showGameOverScreen(scene) {
+async function showGameOverScreen(scene) {
     console.log('Game Over! Displaying Game Over Screen.');
     gameStarted = false;
-
     scene.cameras.main.stopFollow();
 
     const cameraCenterX = scene.cameras.main.scrollX + config.width / 2;
@@ -207,29 +221,35 @@ function showGameOverScreen(scene) {
         .setOrigin(0.5)
         .setDepth(11);
 
-    // Consistent leaderboard display
-    let leaderboard = loadLeaderboard();
+    // Fetch and display initial global leaderboard
+    let leaderboard = await fetchGlobalLeaderboard();
     let leaderboardTextObj = scene.add.text(cameraCenterX, cameraCenterY + 100, 
-        'Leaderboard:\n' + leaderboard.map((entry, index) => 
-            `${index + 1}. ${entry.initials} - ${entry.score}`).join('\n'), 
+        'Global Leaderboard:\n' + (leaderboard.length ? leaderboard.map((entry, index) => 
+            `${index + 1}. ${entry.initials} - ${entry.score}`).join('\n') : 'No scores yet'), 
         { fontSize: '20px', fill: '#ffffff', align: 'center' })
         .setOrigin(0.5)
         .setDepth(11);
 
-    // Mobile-friendly initials input
+    // Initials input
     const initialsText = scene.add.text(cameraCenterX, cameraCenterY - 20, 'Tap here to enter initials', 
         { fontSize: '24px', fill: '#ffffff', align: 'center', backgroundColor: '#333333', padding: { x: 10, y: 5 } })
         .setOrigin(0.5)
         .setInteractive()
         .setDepth(11)
-        .on('pointerdown', () => {
+        .on('pointerdown', async () => {
             const initials = prompt('Enter 3 initials (A-Z):', '').toUpperCase();
             if (initials && /^[A-Z]{3}$/.test(initials)) {
-                leaderboard = updateLeaderboard(initials, score);
-                leaderboardTextObj.setText('Leaderboard:\n' + leaderboard.map((entry, index) => 
-                    `${index + 1}. ${entry.initials} - ${entry.score}`).join('\n'));
-                initialsText.setText(`Initials: ${initials}`);
-                initialsText.disableInteractive();
+                const success = await submitScore(initials, score);
+                if (success) {
+                    await new Promise(resolve => setTimeout(resolve, 1000)); // Wait for Firebase
+                    leaderboard = await fetchGlobalLeaderboard();
+                    leaderboardTextObj.setText('Global Leaderboard:\n' + (leaderboard.length ? leaderboard.map((entry, index) => 
+                        `${index + 1}. ${entry.initials} - ${entry.score}`).join('\n') : 'No scores yet'));
+                    initialsText.setText(`Initials: ${initials}`);
+                    initialsText.disableInteractive();
+                } else {
+                    alert('Failed to submit score. Check console for details.');
+                }
             } else {
                 alert('Please enter exactly 3 letters (A-Z).');
             }
