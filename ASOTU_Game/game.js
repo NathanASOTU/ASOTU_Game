@@ -34,6 +34,7 @@ let lastPlatformY = 0;
 let lastDirectionUp = false;
 let isClickingLeft = false;
 let isClickingRight = false;
+let startMusic, gameplayMusic; // Music variables
 
 const playerStartX = 400;
 const playerStartY = 450;
@@ -58,8 +59,12 @@ function preload() {
     console.log('Loading platform_large from assets/obstacles/junker_large.png');
     this.load.image('token', 'assets/obstacles/token.png');
     this.load.image('obstacle', 'assets/obstacles/obstacle.png');
+    this.load.spritesheet('obstacle_hit', 'assets/obstacles/obstacle_hit.png', { frameWidth: 64, frameHeight: 64 });
     this.load.spritesheet('geartickler', 'assets/characters/geartickler.png', { frameWidth: 48, frameHeight: 48 });
     this.load.spritesheet('kyle', 'assets/characters/kyle.png', { frameWidth: 48, frameHeight: 48 });
+    // Load music tracks
+    this.load.audio('start_music', 'assets/audio/start_music.mp3');
+    this.load.audio('gameplay_music', 'assets/audio/gameplay_music.mp3');
 }
 
 function generateInitialPlatforms(scene) {
@@ -121,9 +126,23 @@ function generatePlatform(scene, xPosition) {
     newPlatform.body.allowGravity = false;
 
     if (tokens.getChildren().length < maxVisibleTokens && Phaser.Math.Between(0, 1) === 1) {
-        const tokenY = platformY - minTokenSpacingY;
+        const isOnPlatform = Phaser.Math.Between(0, 1) === 1;
+        let tokenY;
+        if (isOnPlatform) {
+            tokenY = platformY - newPlatform.height / 2 - 10;
+        } else {
+            tokenY = Phaser.Math.Between(minPlatformY + maxJumpHeight, maxPlatformY - maxJumpHeight);
+            const platformBounds = newPlatform.getBounds();
+            const minDistance = 100;
+            if (Math.abs(tokenY - platformY) < minDistance) {
+                tokenY = platformY > config.height / 2 
+                    ? platformY - minDistance 
+                    : platformY + minDistance;
+                tokenY = Phaser.Math.Clamp(tokenY, minPlatformY + maxJumpHeight, maxPlatformY - maxJumpHeight);
+            }
+        }
         tokens.create(xPosition, tokenY, 'token').setGravityY(-300);
-        console.log(`Token created at (${xPosition}, ${tokenY})`);
+        console.log(`Token created at (${xPosition}, ${tokenY}) - ${isOnPlatform ? 'On platform' : 'Mid-air'}`);
     }
 
     if (xPosition > lastPlatformX) {
@@ -133,11 +152,14 @@ function generatePlatform(scene, xPosition) {
     console.log(`Placed ${selectedPlatform} at (${xPosition}, ${platformY})`);
 }
 
-function generateObstacle() {
-    const obstacleX = this.cameras.main.scrollX + Phaser.Math.Between(0, config.width);
-    const obstacle = obstacles.create(obstacleX, -50, 'obstacle');
-    obstacle.setVelocityY(150);
+function generateObstacle(scene) {
+    const obstacleX = scene.cameras.main.scrollX + Phaser.Math.Between(0, config.width);
+    const isClimbing = Phaser.Math.Between(0, 1) === 1;
+    const startY = isClimbing ? config.height + 50 : -50;
+    const obstacle = obstacles.create(obstacleX, startY, 'obstacle');
+    obstacle.setVelocityY(isClimbing ? -150 : 150);
     obstacle.setGravityY(-300);
+    console.log(`Obstacle created at (${obstacleX}, ${startY}) - ${isClimbing ? 'Climbing' : 'Falling'}`);
 }
 
 function collectToken(player, token) {
@@ -148,24 +170,30 @@ function collectToken(player, token) {
 }
 
 function hitObstacle(player, obstacle) {
-    obstacle.destroy();
-    console.log('Hit animation triggered!');
+    console.log('Hit obstacle! Triggering interaction animation.');
     isHit = true;
     player.anims.stop();
     player.anims.play('hit_animation', true);
     player.setTint(0xff4201);
 
-    player.once('animationcomplete-hit_animation', () => {
-        isHit = false;
-        player.clearTint();
-        player.anims.play('idle', true);
+    obstacle.setVelocityY(0);
+    obstacle.setTexture('obstacle_hit');
+    obstacle.anims.play('obstacle_hit_anim', true);
+
+    obstacle.once('animationcomplete-obstacle_hit_anim', () => {
+        obstacle.destroy();
+        console.log('Obstacle destroyed after animation.');
+        player.once('animationcomplete-hit_animation', () => {
+            isHit = false;
+            player.clearTint();
+            player.anims.play('idle', true);
+        });
     });
 
     score = Math.max(0, score - 1);
     scoreText.setText('CON Points: ' + score);
 }
 
-// Firebase Leaderboard Functions
 async function fetchGlobalLeaderboard() {
     try {
         const response = await fetch('https://road-to-asotu-con-default-rtdb.firebaseio.com/leaderboard.json', {
@@ -205,6 +233,13 @@ async function showGameOverScreen(scene) {
     gameStarted = false;
     scene.cameras.main.stopFollow();
 
+    // Ensure gameplay music continues (no action needed if already playing)
+    if (!gameplayMusic || !gameplayMusic.isPlaying) {
+        gameplayMusic = scene.sound.add('gameplay_music', { loop: true });
+        gameplayMusic.play();
+        console.log('Gameplay music started on game over screen.');
+    }
+
     const cameraCenterX = scene.cameras.main.scrollX + config.width / 2;
     const cameraCenterY = scene.cameras.main.scrollY + config.height / 2;
 
@@ -221,17 +256,7 @@ async function showGameOverScreen(scene) {
         .setOrigin(0.5)
         .setDepth(11);
 
-    // Fetch and display initial global leaderboard
-    let leaderboard = await fetchGlobalLeaderboard();
-    let leaderboardTextObj = scene.add.text(cameraCenterX, cameraCenterY + 100, 
-        'Global Leaderboard:\n' + (leaderboard.length ? leaderboard.map((entry, index) => 
-            `${index + 1}. ${entry.initials} - ${entry.score}`).join('\n') : 'No scores yet'), 
-        { fontSize: '20px', fill: '#ffffff', align: 'center' })
-        .setOrigin(0.5)
-        .setDepth(11);
-
-    // Initials input
-    const initialsText = scene.add.text(cameraCenterX, cameraCenterY - 20, 'Tap here to enter initials', 
+    const initialsText = scene.add.text(cameraCenterX, cameraCenterY - 40, 'Tap here to enter initials', 
         { fontSize: '24px', fill: '#ffffff', align: 'center', backgroundColor: '#333333', padding: { x: 10, y: 5 } })
         .setOrigin(0.5)
         .setInteractive()
@@ -241,7 +266,7 @@ async function showGameOverScreen(scene) {
             if (initials && /^[A-Z]{3}$/.test(initials)) {
                 const success = await submitScore(initials, score);
                 if (success) {
-                    await new Promise(resolve => setTimeout(resolve, 1000)); // Wait for Firebase
+                    await new Promise(resolve => setTimeout(resolve, 1000));
                     leaderboard = await fetchGlobalLeaderboard();
                     leaderboardTextObj.setText('Global Leaderboard:\n' + (leaderboard.length ? leaderboard.map((entry, index) => 
                         `${index + 1}. ${entry.initials} - ${entry.score}`).join('\n') : 'No scores yet'));
@@ -255,6 +280,14 @@ async function showGameOverScreen(scene) {
             }
         });
 
+    let leaderboard = await fetchGlobalLeaderboard();
+    let leaderboardTextObj = scene.add.text(cameraCenterX, cameraCenterY + 100, 
+        'Global Leaderboard:\n' + (leaderboard.length ? leaderboard.map((entry, index) => 
+            `${index + 1}. ${entry.initials} - ${entry.score}`).join('\n') : 'No scores yet'), 
+        { fontSize: '20px', fill: '#ffffff', align: 'center' })
+        .setOrigin(0.5)
+        .setDepth(11);
+
     scene.add.text(cameraCenterX, cameraCenterY + 250, 'Start New Game', 
         { fontSize: '36px', fill: '#ffffff', align: 'center' })
         .setOrigin(0.5)
@@ -263,6 +296,11 @@ async function showGameOverScreen(scene) {
         .on('pointerdown', () => {
             score = 0;
             scene.scene.restart();
+            // Restart gameplay music if it stopped
+            if (gameplayMusic && !gameplayMusic.isPlaying) {
+                gameplayMusic.play();
+                console.log('Gameplay music restarted.');
+            }
         });
 }
 
@@ -270,6 +308,19 @@ function startGame(scene) {
     console.log('Initializing game...');
     gameStarted = true;
     score = 0;
+
+    // Stop start music and start gameplay music
+    if (startMusic && startMusic.isPlaying) {
+        startMusic.stop();
+        console.log('Start music stopped.');
+    }
+    if (!gameplayMusic) {
+        gameplayMusic = scene.sound.add('gameplay_music', { loop: true, volume: 0.5 });
+    }
+    if (!gameplayMusic.isPlaying) {
+        gameplayMusic.play();
+        console.log('Gameplay music started.');
+    }
 
     const playerSprite = selectedPlayer === 'paul' ? 'geartickler' : 'kyle';
     player = scene.physics.add.sprite(playerStartX, playerStartY, playerSprite);
@@ -318,6 +369,13 @@ function startGame(scene) {
         repeat: 7
     });
 
+    scene.anims.create({
+        key: 'obstacle_hit_anim',
+        frames: scene.anims.generateFrameNumbers('obstacle_hit', { start: 6, end: 7 }),
+        frameRate: 10,
+        repeat: 0
+    });
+
     scene.physics.add.collider(player, platforms, (player, platform) => {
         if (player.body.touching.up) {
             player.setVelocityY(-330);
@@ -336,7 +394,7 @@ function startGame(scene) {
 
     scene.time.addEvent({
         delay: 1500,
-        callback: generateObstacle,
+        callback: () => generateObstacle(scene),
         callbackScope: scene,
         loop: true
     });
@@ -365,6 +423,11 @@ function startGame(scene) {
 
 function create() {
     console.log('Displaying player selection screen...');
+
+    // Start the start screen music
+    startMusic = this.sound.add('start_music', { loop: true, volume: 0.5 });
+    startMusic.play();
+    console.log('Start music started.');
 
     this.add.text(400, 150, 'Choose Your Player', 
         { fontSize: '48px', fill: '#ffffff', align: 'center' })
@@ -450,6 +513,20 @@ function update() {
         if (platform.x < this.cameras.main.scrollX - config.width * 1.5) {
             platform.destroy();
             console.log(`Destroyed platform at ${platform.x}`);
+        }
+    });
+
+    obstacles.getChildren().forEach(obstacle => {
+        if (obstacle.y < -50 || obstacle.y > config.height + 50) {
+            obstacle.destroy();
+            console.log(`Obstacle destroyed at (${obstacle.x}, ${obstacle.y}) - Out of bounds`);
+        }
+    });
+
+    tokens.getChildren().forEach(token => {
+        if (token.x < this.cameras.main.scrollX - config.width * 1.5) {
+            token.destroy();
+            console.log(`Token destroyed at (${token.x}, ${token.y}) - Out of bounds`);
         }
     });
 }
