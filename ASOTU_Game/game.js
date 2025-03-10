@@ -15,7 +15,10 @@ const config = {
         create: create,
         update: update
     },
-    backgroundColor: '#0e343c'
+    backgroundColor: '#0e343c',
+    input: { // Added: Explicitly enable touch input
+        touch: true
+    }
 };
 
 const game = new Phaser.Game(config);
@@ -28,8 +31,8 @@ let selectedPlayer = null;
 let lastPlatformX = 0;
 let lastPlatformY = 0;
 let lastDirectionUp = false;
-let isClickingLeft = false;  // Added: Tracks left-side click/tap
-let isClickingRight = false; // Added: Tracks right-side click/tap
+let isClickingLeft = false;
+let isClickingRight = false;
 
 const playerStartX = 400;
 const playerStartY = 450;
@@ -266,19 +269,23 @@ function startGame(scene) {
         loop: true
     });
 
-    // Added: Click/tap controls to mimic cursor movement
+    // Modified: Simplified touch input handling with logging
     scene.input.on('pointerdown', (pointer) => {
-        const clickX = pointer.x + scene.cameras.main.scrollX; // Adjust for camera scroll
-        if (clickX < scene.cameras.main.width / 2 + scene.cameras.main.scrollX) {
+        const clickX = pointer.x; // Use screen X directly
+        console.log(`Pointer down at X: ${clickX}, ScrollX: ${scene.cameras.main.scrollX}`);
+        if (clickX < config.width / 2) { // Check against screen width directly
             isClickingLeft = true;
             isClickingRight = false;
+            console.log('Moving left');
         } else {
             isClickingRight = true;
             isClickingLeft = false;
+            console.log('Moving right');
         }
     });
 
-    scene.input.on('pointerup', () => {
+    scene.input.on('pointerup', (pointer) => {
+        console.log('Pointer up');
         isClickingLeft = false;
         isClickingRight = false;
     });
@@ -339,11 +346,10 @@ function create() {
 }
 
 function update() {
-    if (!gameStarted || !player) return; // Modified: Removed !cursors check
+    if (!gameStarted || !player) return;
 
     if (isHit) return;
 
-    // Modified: Check both keyboard and click/tap inputs
     if ((cursors && cursors.left.isDown) || isClickingLeft) {
         player.setVelocityX(-160);
         player.anims.play('move_left', true);
