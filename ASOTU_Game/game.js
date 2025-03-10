@@ -16,7 +16,7 @@ const config = {
         update: update
     },
     backgroundColor: '#0e343c',
-    input: { // Added: Explicitly enable touch input
+    input: {
         touch: true
     }
 };
@@ -44,8 +44,8 @@ const maxJumpHeight = 150;
 const minPlatformSpacingX = 120;
 const maxPlatformSpacingX = 220;
 
-const minPlatformY = 150;
-const maxPlatformY = 550;
+const minPlatformY = 150; // As requested
+const maxPlatformY = 550; // As requested
 const verticalStepMin = 50;
 const verticalStepMax = 180;
 const overlapBuffer = 20;
@@ -167,6 +167,24 @@ function hitObstacle(player, obstacle) {
     scoreText.setText('CON Points: ' + score);
 }
 
+function loadLeaderboard() {
+    const leaderboard = localStorage.getItem('asotuConLeaderboard');
+    return leaderboard ? JSON.parse(leaderboard) : [];
+}
+
+function saveLeaderboard(leaderboard) {
+    localStorage.setItem('asotuConLeaderboard', JSON.stringify(leaderboard));
+}
+
+function updateLeaderboard(initials, score) {
+    let leaderboard = loadLeaderboard();
+    leaderboard.push({ initials, score });
+    leaderboard.sort((a, b) => b.score - a.score);
+    leaderboard = leaderboard.slice(0, 10);
+    saveLeaderboard(leaderboard);
+    return leaderboard;
+}
+
 function showGameOverScreen(scene) {
     console.log('Game Over! Displaying Game Over Screen.');
     gameStarted = false;
@@ -178,12 +196,46 @@ function showGameOverScreen(scene) {
 
     scene.add.rectangle(cameraCenterX, cameraCenterY, 800, 600, 0x0e343c).setDepth(10);
 
-    scene.add.text(cameraCenterX, cameraCenterY - 50, `Game Over\nFinal Score: ${score}`, 
-        { fontSize: '48px', fill: '#ffffff', align: 'center' })
+    scene.add.text(cameraCenterX, cameraCenterY - 200, 
+        'The Road to ASOTU CON ends in Baltimore\non May 13-16. We hope to see you there!', 
+        { fontSize: '32px', fill: '#ffffff', align: 'center' })
         .setOrigin(0.5)
         .setDepth(11);
 
-    scene.add.text(cameraCenterX, cameraCenterY + 50, 'Start New Game', 
+    scene.add.text(cameraCenterX, cameraCenterY - 80, `Final Score: ${score}`, 
+        { fontSize: '36px', fill: '#ffffff', align: 'center' })
+        .setOrigin(0.5)
+        .setDepth(11);
+
+    // Consistent leaderboard display
+    let leaderboard = loadLeaderboard();
+    let leaderboardTextObj = scene.add.text(cameraCenterX, cameraCenterY + 100, 
+        'Leaderboard:\n' + leaderboard.map((entry, index) => 
+            `${index + 1}. ${entry.initials} - ${entry.score}`).join('\n'), 
+        { fontSize: '20px', fill: '#ffffff', align: 'center' })
+        .setOrigin(0.5)
+        .setDepth(11);
+
+    // Mobile-friendly initials input
+    const initialsText = scene.add.text(cameraCenterX, cameraCenterY - 20, 'Tap here to enter initials', 
+        { fontSize: '24px', fill: '#ffffff', align: 'center', backgroundColor: '#333333', padding: { x: 10, y: 5 } })
+        .setOrigin(0.5)
+        .setInteractive()
+        .setDepth(11)
+        .on('pointerdown', () => {
+            const initials = prompt('Enter 3 initials (A-Z):', '').toUpperCase();
+            if (initials && /^[A-Z]{3}$/.test(initials)) {
+                leaderboard = updateLeaderboard(initials, score);
+                leaderboardTextObj.setText('Leaderboard:\n' + leaderboard.map((entry, index) => 
+                    `${index + 1}. ${entry.initials} - ${entry.score}`).join('\n'));
+                initialsText.setText(`Initials: ${initials}`);
+                initialsText.disableInteractive();
+            } else {
+                alert('Please enter exactly 3 letters (A-Z).');
+            }
+        });
+
+    scene.add.text(cameraCenterX, cameraCenterY + 250, 'Start New Game', 
         { fontSize: '36px', fill: '#ffffff', align: 'center' })
         .setOrigin(0.5)
         .setInteractive()
@@ -269,11 +321,11 @@ function startGame(scene) {
         loop: true
     });
 
-    // Modified: Simplified touch input handling with logging
+    scene.input.enabled = true;
     scene.input.on('pointerdown', (pointer) => {
-        const clickX = pointer.x; // Use screen X directly
+        const clickX = pointer.x;
         console.log(`Pointer down at X: ${clickX}, ScrollX: ${scene.cameras.main.scrollX}`);
-        if (clickX < config.width / 2) { // Check against screen width directly
+        if (clickX < config.width / 2) {
             isClickingLeft = true;
             isClickingRight = false;
             console.log('Moving left');
