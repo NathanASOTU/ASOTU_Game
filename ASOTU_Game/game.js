@@ -28,6 +28,8 @@ let player, cursors, platforms, tokens, obstacles, scoreText;
 let gameStarted = false;
 let score = 0;
 let isHit = false;
+let hitCooldown = 0; // Cooldown timer variable
+let lastHitTime = 0; // Timestamp of last hit for debouncing
 let selectedPlayer = null;
 let lastPlatformX = 0;
 let lastPlatformY = 0;
@@ -39,7 +41,7 @@ let startMusic, gameplayMusic; // Music variables
 const playerStartX = 400;
 const playerStartY = 450;
 const maxVisiblePlatforms = 10;
-const maxVisibleTokens = 8;
+const maxVisibleTokens = 12;
 const maxJumpHeight = 150;
 const minPlatformSpacingX = 120;
 const maxPlatformSpacingX = 220;
@@ -49,6 +51,8 @@ const verticalStepMin = 50;
 const verticalStepMax = 180;
 const overlapBuffer = 20;
 const minTokenSpacingY = 50;
+const HIT_COOLDOWN_DURATION = 800; // 800ms matches hit_animation duration
+const HIT_DEBOUNCE_WINDOW = 100; // 100ms debounce window
 
 function preload() {
     this.load.image('platform_small', 'assets/obstacles/junker_small.png');
@@ -125,8 +129,8 @@ function generatePlatform(scene, xPosition) {
     newPlatform.body.immovable = true;
     newPlatform.body.allowGravity = false;
 
-    if (tokens.getChildren().length < maxVisibleTokens && Phaser.Math.Between(0, 1) === 1) {
-        const isOnPlatform = Phaser.Math.Between(0, 1) === 1;
+    if (tokens.getChildren().length < maxVisibleTokens && Phaser.Math.Between(0, 2) <= 1) { // 66% chance
+        const isOnPlatform = Phaser.Math.Between(0, 2) !== 0; // 66% chance to spawn on platform
         let tokenX, tokenY;
         const platformBounds = newPlatform.getBounds();
         const minDistance = 100; // Minimum vertical distance
@@ -185,20 +189,38 @@ function generateObstacle(scene) {
 function collectToken(player, token) {
     token.destroy();
     score += 1;
-    scoreText.setText('CON Points: ' + score);
-    console.log('Token collected!');
+    scoreText.setText('Con Coins: ' + score);
+    console.log('Token collected! Con Coins: ' + score);
 }
 
 function hitObstacle(player, obstacle) {
-    console.log('Hit obstacle! Triggering interaction animation.');
-    isHit = true;
-    player.anims.stop();
-    player.anims.play('hit_animation', true);
-    player.setTint(0xff4201);
+    const currentTime = Date.now();
+    console.log(`hitObstacle called for obstacle at (${obstacle.x}, ${obstacle.y}), hitCooldown: ${hitCooldown}, time since last hit: ${currentTime - lastHitTime}ms`);
 
+    // Debounce: Block if within 100ms of last hit or on cooldown
+    if (hitCooldown > 0 || (currentTime - lastHitTime < HIT_DEBOUNCE_WINDOW)) {
+        console.log('Hit blocked by cooldown or debounce');
+        return;
+    }
+
+    console.log('Processing hit with obstacle.');
+    isHit = true;
+    hitCooldown = HIT_COOLDOWN_DURATION; // Set cooldown to 800ms
+    lastHitTime = currentTime; // Update last hit timestamp
+
+    // Deduct score
+    score = Math.max(0, score - 1);
+    scoreText.setText('Con Coins: ' + score);
+    console.log(`Con Coin deducted. New total: ${score}`);
+
+    // Animation setup
     obstacle.setVelocityY(0);
     obstacle.setTexture('obstacle_hit');
     obstacle.anims.play('obstacle_hit_anim', true);
+
+    player.anims.stop();
+    player.anims.play('hit_animation', true);
+    player.setTint(0xff4201);
 
     obstacle.once('animationcomplete-obstacle_hit_anim', () => {
         obstacle.destroy();
@@ -209,9 +231,6 @@ function hitObstacle(player, obstacle) {
             player.anims.play('idle', true);
         });
     });
-
-    score = Math.max(0, score - 1);
-    scoreText.setText('CON Points: ' + score);
 }
 
 async function fetchGlobalLeaderboard() {
@@ -270,7 +289,7 @@ async function showGameOverScreen(scene) {
         .setOrigin(0.5)
         .setDepth(11);
 
-    scene.add.text(cameraCenterX, cameraCenterY - 80, `Final Score: ${score}`, 
+    scene.add.text(cameraCenterX, cameraCenterY - 80, `Final Con Coins: ${score}`, 
         { fontSize: '36px', fill: '#ffffff', align: 'center' })
         .setOrigin(0.5)
         .setDepth(11);
@@ -322,6 +341,7 @@ function startGame(scene) {
     console.log('Initializing game...');
     gameStarted = true;
     score = 0;
+    lastHitTime = 0; // Reset on game start
 
     // Stop start music and start gameplay music
     if (startMusic && startMusic.isPlaying) {
@@ -401,9 +421,9 @@ function startGame(scene) {
     });
 
     scene.physics.add.overlap(player, tokens, collectToken, null, scene);
-    scene.physics.add.overlap(player, obstacles, hitObstacle, null, scene);
+    scene.physics.add.overlap(player, obstacles, hitObstacle, null, scene); // Revert to overlap with debounce
 
-    scoreText = scene.add.text(16, 16, 'CON Points: ' + score, { fontSize: '32px', fill: '#ffffff' });
+    scoreText = scene.add.text(16, 16, 'Con Coins: ' + score, { fontSize: '32px', fill: '#ffffff' });
     scoreText.setScrollFactor(0);
 
     scene.time.addEvent({
@@ -494,7 +514,7 @@ async function create() {
                 paulPreview.destroy();
                 kylePreview.destroy();
                 startButton.destroy();
-                this.children.list.filter(child => child.type === 'Text' && child.text !== 'CON Points: 0').forEach(child => child.destroy());
+                this.children.list.filter(child => child.type === 'Text' && child.text !== 'Con Coins: 0').forEach(child => child.destroy());
                 startGame(this);
             } else {
                 console.log('Please select a player first!');
@@ -506,6 +526,15 @@ function update() {
     if (!gameStarted || !player) return;
 
     if (isHit) return;
+
+    // Update hit cooldown
+    if (hitCooldown > 0) {
+        hitCooldown -= this.game.loop.delta; // Decrease by frame time (ms)
+        if (hitCooldown <= 0) {
+            hitCooldown = 0; // Ensure it doesn't go negative
+            console.log('Hit cooldown expired.');
+        }
+    }
 
     if ((cursors && cursors.left.isDown) || isClickingLeft) {
         player.setVelocityX(-160);
