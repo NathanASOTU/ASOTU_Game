@@ -127,22 +127,42 @@ function generatePlatform(scene, xPosition) {
 
     if (tokens.getChildren().length < maxVisibleTokens && Phaser.Math.Between(0, 1) === 1) {
         const isOnPlatform = Phaser.Math.Between(0, 1) === 1;
-        let tokenY;
+        let tokenX, tokenY;
+        const platformBounds = newPlatform.getBounds();
+        const minDistance = 100; // Minimum vertical distance
+        const horizontalBuffer = 50; // Minimum horizontal buffer from platform edges
+
         if (isOnPlatform) {
-            tokenY = platformY - newPlatform.height / 2 - 10;
+            tokenY = platformY - newPlatform.height / 2 - 10; // On top of platform
+            tokenX = xPosition; // Center of platform
         } else {
+            // Mid-air placement with stricter distance checks
+            tokenX = xPosition + Phaser.Math.Between(-horizontalBuffer, horizontalBuffer);
             tokenY = Phaser.Math.Between(minPlatformY + maxJumpHeight, maxPlatformY - maxJumpHeight);
-            const platformBounds = newPlatform.getBounds();
-            const minDistance = 100;
+
+            // Ensure vertical and horizontal separation from platform
             if (Math.abs(tokenY - platformY) < minDistance) {
                 tokenY = platformY > config.height / 2 
                     ? platformY - minDistance 
                     : platformY + minDistance;
-                tokenY = Phaser.Math.Clamp(tokenY, minPlatformY + maxJumpHeight, maxPlatformY - maxJumpHeight);
             }
+            if (Math.abs(tokenX - xPosition) < horizontalBuffer) {
+                tokenX = xPosition > config.width / 2 
+                    ? xPosition - horizontalBuffer 
+                    : xPosition + horizontalBuffer;
+            }
+            tokenY = Phaser.Math.Clamp(tokenY, minPlatformY + maxJumpHeight, maxPlatformY - maxJumpHeight);
+            tokenX = Phaser.Math.Clamp(tokenX, xPosition - horizontalBuffer, xPosition + horizontalBuffer);
         }
-        tokens.create(xPosition, tokenY, 'token').setGravityY(-300);
-        console.log(`Token created at (${xPosition}, ${tokenY}) - ${isOnPlatform ? 'On platform' : 'Mid-air'}`);
+
+        // Final overlap check with all platforms
+        const tokenBounds = new Phaser.Geom.Rectangle(tokenX - 16, tokenY - 16, 32, 32); // Assuming token is ~32x32
+        if (!platforms.getChildren().some(p => Phaser.Geom.Intersects.RectangleToRectangle(p.getBounds(), tokenBounds))) {
+            tokens.create(tokenX, tokenY, 'token').setGravityY(-300);
+            console.log(`Token created at (${tokenX}, ${tokenY}) - ${isOnPlatform ? 'On platform' : 'Mid-air'}`);
+        } else {
+            console.log(`Token at (${tokenX}, ${tokenY}) skipped due to platform overlap`);
+        }
     }
 
     if (xPosition > lastPlatformX) {
@@ -415,19 +435,19 @@ function startGame(scene) {
     });
 }
 
-function create() {
+async function create() {
     console.log('Displaying player selection screen...');
 
-    // Start the start screen music with volume 0.25
+    // Start the start screen music with volume 0.05
     startMusic = this.sound.add('start_music', { loop: true, volume: 0.05 });
     startMusic.play();
     console.log('Start music started.');
 
-    this.add.text(400, 150, 'Choose Your Player', 
+    this.add.text(400, 100, 'Choose Your Player', 
         { fontSize: '48px', fill: '#ffffff', align: 'center' })
         .setOrigin(0.5);
 
-    const paulPreview = this.add.sprite(300, 300, 'geartickler', 0)
+    const paulPreview = this.add.sprite(300, 200, 'geartickler', 0)
         .setOrigin(0.5)
         .setInteractive()
         .on('pointerdown', () => {
@@ -438,11 +458,11 @@ function create() {
             startButton.setStyle({ fill: '#ffffff' });
         });
 
-    this.add.text(300, 350, 'Paul', 
+    this.add.text(300, 250, 'Paul', 
         { fontSize: '32px', fill: '#ffffff', align: 'center' })
         .setOrigin(0.5);
 
-    const kylePreview = this.add.sprite(500, 300, 'kyle', 0)
+    const kylePreview = this.add.sprite(500, 200, 'kyle', 0)
         .setOrigin(0.5)
         .setInteractive()
         .on('pointerdown', () => {
@@ -453,11 +473,19 @@ function create() {
             startButton.setStyle({ fill: '#ffffff' });
         });
 
-    this.add.text(500, 350, 'Kyle', 
+    this.add.text(500, 250, 'Kyle', 
         { fontSize: '32px', fill: '#ffffff', align: 'center' })
         .setOrigin(0.5);
 
-    const startButton = this.add.text(400, 450, 'Start Game', 
+    // Add leaderboard to start screen
+    let leaderboard = await fetchGlobalLeaderboard();
+    this.add.text(400, 500, 
+        'Global Leaderboard:\n' + (leaderboard.length ? leaderboard.map((entry, index) => 
+            `${index + 1}. ${entry.initials} - ${entry.score}`).join('\n') : 'No scores yet'), 
+        { fontSize: '16px', fill: '#ffffff', align: 'center' })
+        .setOrigin(0.5);
+
+    const startButton = this.add.text(400, 350, 'Start Game', 
         { fontSize: '36px', fill: '#666666', align: 'center' })
         .setOrigin(0.5)
         .setInteractive()
