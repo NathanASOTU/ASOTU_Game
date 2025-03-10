@@ -233,11 +233,10 @@ async function showGameOverScreen(scene) {
     gameStarted = false;
     scene.cameras.main.stopFollow();
 
-    // Ensure gameplay music continues (no action needed if already playing)
-    if (!gameplayMusic || !gameplayMusic.isPlaying) {
-        gameplayMusic = scene.sound.add('gameplay_music', { loop: true });
-        gameplayMusic.play();
-        console.log('Gameplay music started on game over screen.');
+    // Stop gameplay music
+    if (gameplayMusic && gameplayMusic.isPlaying) {
+        gameplayMusic.stop();
+        console.log('Gameplay music stopped on game over screen.');
     }
 
     const cameraCenterX = scene.cameras.main.scrollX + config.width / 2;
@@ -296,11 +295,6 @@ async function showGameOverScreen(scene) {
         .on('pointerdown', () => {
             score = 0;
             scene.scene.restart();
-            // Restart gameplay music if it stopped
-            if (gameplayMusic && !gameplayMusic.isPlaying) {
-                gameplayMusic.play();
-                console.log('Gameplay music restarted.');
-            }
         });
 }
 
@@ -315,7 +309,7 @@ function startGame(scene) {
         console.log('Start music stopped.');
     }
     if (!gameplayMusic) {
-        gameplayMusic = scene.sound.add('gameplay_music', { loop: true, volume: 0.5 });
+        gameplayMusic = scene.sound.add('gameplay_music', { loop: true, volume: 0.05 });
     }
     if (!gameplayMusic.isPlaying) {
         gameplayMusic.play();
@@ -424,8 +418,8 @@ function startGame(scene) {
 function create() {
     console.log('Displaying player selection screen...');
 
-    // Start the start screen music
-    startMusic = this.sound.add('start_music', { loop: true, volume: 0.5 });
+    // Start the start screen music with volume 0.25
+    startMusic = this.sound.add('start_music', { loop: true, volume: 0.05 });
     startMusic.play();
     console.log('Start music started.');
 
