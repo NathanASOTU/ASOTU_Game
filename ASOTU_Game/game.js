@@ -581,11 +581,12 @@ function showExplanationScreen(scene) {
 	'Con Coins while avoiding industry buzzwords.\n\n' +
         '- Use the left and right buttons \n' +
 	'or arrow keys to move. \n' +
-        '-Con Coins are +1, +3 or grant Invincibility \n' +
-        '- Hitting obstacles deducts 1 life and 1 Con Coin. \n' +
-        '- While invincible, obstacles grant 1 life (up to 10).\n\n' +
+        '-Con Coins are +1, +3 or grant Invincibility. \n' +
+        '- Hitting buzzwords deducts 1 life and 1 Con Coin. \n' +
+        '- While invincible, buzzwords grant 1 life (up to 10).\n' +
         '- You start with 3 lives.\n' +
-        '- Game over if lives reach 0 or you fall off the screen.\n\n' +
+        '- Game over if you run out of lives \n' +
+	'or you fall off the screen.\n\n' +
         'Good luck on your journey to ASOTU CON!',
         {
             fontSize: '24px',
