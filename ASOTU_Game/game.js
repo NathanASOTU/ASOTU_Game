@@ -578,10 +578,10 @@ function showExplanationScreen(scene) {
     // Add instructions
     const instructions = scene.add.text(config.width / 2, 350, 
         'Objective: Get to ASOTU CON by collecting \n' + 
-	'-Con Coins while avoiding industry buzzwords.\n\n' +
+	'Con Coins while avoiding industry buzzwords.\n\n' +
         '- Use the left and right buttons \n' +
 	'or arrow keys to move. \n' +
-        'Con Coins are +1, +3 or grant Invincibility \n' +
+        '-Con Coins are +1, +3 or grant Invincibility \n' +
         '- Hitting obstacles deducts 1 life and 1 Con Coin. \n' +
         '- While invincible, obstacles grant 1 life (up to 10).\n\n' +
         '- You start with 3 lives.\n' +
