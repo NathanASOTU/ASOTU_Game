@@ -1,13 +1,54 @@
+// Define the preload function
+function preload() {
+    console.log('Starting preload...');
+    this.load.image('platform_small', 'assets/obstacles/junker_small.png');
+    this.load.image('platform_medium', 'assets/obstacles/junker_medium.png');
+    this.load.image('platform_large', 'assets/obstacles/junker_large.png');
+    this.load.image('token', 'assets/obstacles/token.png');
+    this.load.image('token2', 'assets/obstacles/token2.png');
+    this.load.image('token3', 'assets/obstacles/token3.png');
+    this.load.image('obstacle', 'assets/obstacles/obstacle.png');
+    this.load.spritesheet('obstacle_hit', 'assets/obstacles/obstacle_hit.png', { frameWidth: 64, frameHeight: 64 });
+    this.load.spritesheet('geartickler', 'assets/characters/geartickler.png', { frameWidth: 48, frameHeight: 48 });
+    this.load.spritesheet('geartickler_invincible', 'assets/characters/geartickler_invincible.png', { frameWidth: 48, frameHeight: 48 });
+    this.load.spritesheet('kyle', 'assets/characters/kyle.png', { frameWidth: 48, frameHeight: 48 });
+    this.load.spritesheet('kyle_invincible', 'assets/characters/kyle_invincible.png', { frameWidth: 48, frameHeight: 48 });
+    this.load.audio('start_music', 'assets/audio/start_music.mp3');
+    this.load.audio('gameplay_music', 'assets/audio/gameplay_music.mp3');
+    this.load.audio('invincibility_sound', 'assets/audio/invincibility_sound.mp3');
+    this.load.audio('obstacle_hit_sound', 'assets/audio/obstacle_hit_sound.mp3');
+    this.load.audio('obstacle_hit_normal_sound', 'assets/audio/obstacle_hit_normal_sound.mp3');
+    this.load.audio('token1_sound', 'assets/audio/token1_sound.mp3');
+    this.load.audio('token2_sound', 'assets/audio/token2_sound.mp3');
+    this.load.image('button_left', 'assets/ui/button_left.png');
+    this.load.image('button_right', 'assets/ui/button_right.png');
+    this.load.image('button_start', 'assets/ui/button_start.png');
+
+    // Load parallax background images
+    this.load.image('bg_far', 'assets/backgrounds/bg_far.png');
+    this.load.image('bg_mid', 'assets/backgrounds/bg_mid.png'); // Single 6144px wide midground image
+
+    // Add load event listeners for debugging
+    this.load.on('filecomplete', (key) => {
+        console.log(`Loaded asset: ${key}`);
+    });
+    this.load.on('loaderror', (file) => {
+        console.error(`Failed to load asset: ${file.key}`);
+    });
+
+    console.log('Preload complete.');
+}
+
 // Game configuration
 const config = {
     type: Phaser.AUTO,
     width: 800,
-    height: 750, // Increased to include HUD (600px game + 150px HUD)
+    height: 750,
     physics: {
         default: 'arcade',
         arcade: { 
             gravity: { y: 300 }, 
-            debug: false 
+            debug: true // Enable physics debugging to visualize collision boxes
         }
     },
     scene: {
@@ -21,10 +62,12 @@ const config = {
     }
 };
 
+console.log('Initializing Phaser game...');
 const game = new Phaser.Game(config);
+console.log('Phaser game initialized.');
 
 // Game variables
-let player, cursors, platforms, tokens, tokens2, tokens3, obstacles, scoreText, livesText, maxLivesMessage;
+let player, cursors, platforms, tokens, tokens2, tokens3, obstacles, scoreText, livesText, maxLivesMessage, livesGainedMessage;
 let gameStarted = false;
 let score = 0;
 let lives = 3;
@@ -47,6 +90,12 @@ let currentSprite = null;
 let hud;
 let leftButton, rightButton;
 let obstacleTimer;
+
+// Parallax background variables
+let bgFar, bgMid;
+// Smoothed scroll position for parallax
+let smoothedScrollX = 0;
+const PARALLAX_SMOOTHING = 0.05; // Smoothing factor for parallax movement
 
 const playerStartX = 400;
 const playerStartY = 450;
@@ -72,41 +121,22 @@ const BUTTON_SIZE = 150;
 const HUD_HEIGHT = 150;
 const GAME_HEIGHT = 600;
 const HUD_DEPTH = 10;
-const MAX_LIVES = 10;
+const MAX_LIVES = 5;
 const WORLD_WIDTH = 200000;
+const MIDGROUND_IMAGE_WIDTH = 6144; // Width of the single midground image
 
-function preload() {
-    this.load.image('platform_small', 'assets/obstacles/junker_small.png');
-    console.log('Loading platform_small from assets/obstacles/junker_small.png');
-    this.load.image('platform_medium', 'assets/obstacles/junker_medium.png');
-    console.log('Loading platform_medium from assets/obstacles/junker_medium.png');
-    this.load.image('platform_large', 'assets/obstacles/junker_large.png');
-    console.log('Loading platform_large from assets/obstacles/junker_large.png');
-    this.load.image('token', 'assets/obstacles/token.png');
-    this.load.image('token2', 'assets/obstacles/token2.png');
-    this.load.image('token3', 'assets/obstacles/token3.png');
-    this.load.image('obstacle', 'assets/obstacles/obstacle.png');
-    this.load.spritesheet('obstacle_hit', 'assets/obstacles/obstacle_hit.png', { frameWidth: 64, frameHeight: 64 });
-    console.log('Loading obstacle_hit from assets/obstacles/obstacle_hit.png');
-    this.load.spritesheet('geartickler', 'assets/characters/geartickler.png', { frameWidth: 48, frameHeight: 48 });
-    this.load.spritesheet('geartickler_invincible', 'assets/characters/geartickler_invincible.png', { frameWidth: 48, frameHeight: 48 });
-    this.load.spritesheet('kyle', 'assets/characters/kyle.png', { frameWidth: 48, frameHeight: 48 });
-    this.load.spritesheet('kyle_invincible', 'assets/characters/kyle_invincible.png', { frameWidth: 48, frameHeight: 48 });
-    this.load.audio('start_music', 'assets/audio/start_music.mp3');
-    this.load.audio('gameplay_music', 'assets/audio/gameplay_music.mp3');
-    this.load.audio('invincibility_sound', 'assets/audio/invincibility_sound.mp3');
-    this.load.audio('obstacle_hit_sound', 'assets/audio/obstacle_hit_sound.mp3');
-    this.load.audio('obstacle_hit_normal_sound', 'assets/audio/obstacle_hit_normal_sound.mp3');
-    this.load.audio('token1_sound', 'assets/audio/token1_sound.mp3');
-    this.load.audio('token2_sound', 'assets/audio/token2_sound.mp3');
-    this.load.image('button_left', 'assets/ui/button_left.png');
-    console.log('Loading button_left from assets/ui/button_left.png');
-    this.load.image('button_right', 'assets/ui/button_right.png');
-    console.log('Loading button_right from assets/ui/button_right.png');
-}
+// Parallax scroll factors for each layer
+const BG_FAR_SCROLL_FACTOR = 0.1;
+const BG_MID_SCROLL_FACTOR = 0.3;
+
+// Calculate the distance the player must travel in the game world to see the full midground image
+const MIDGROUND_LOOP_DISTANCE = MIDGROUND_IMAGE_WIDTH / BG_MID_SCROLL_FACTOR; // 6144 / 0.3 = 20480 pixels
 
 function generateInitialPlatforms(scene) {
+    console.log('Generating initial platforms...');
     const firstPlatform = platforms.create(player.x, player.y + 100, 'platform_medium').refreshBody();
+    firstPlatform.hitCount = 0;
+    firstPlatform.setAlpha(1);
     lastPlatformY = firstPlatform.y;
 
     let previousPlatformX = playerStartX + 50;
@@ -115,6 +145,7 @@ function generateInitialPlatforms(scene) {
         previousPlatformX += Phaser.Math.Between(minPlatformSpacingX, maxPlatformSpacingX);
     }
     lastPlatformX = previousPlatformX;
+    console.log('Initial platforms generated.');
 }
 
 function generatePlatform(scene, xPosition) {
@@ -163,6 +194,9 @@ function generatePlatform(scene, xPosition) {
     newPlatform.body.immovable = true;
     newPlatform.body.allowGravity = false;
 
+    newPlatform.hitCount = 0;
+    newPlatform.setAlpha(1);
+
     let hasToken1 = false;
 
     if (tokens.getChildren().length < maxVisibleTokens && Phaser.Math.Between(0, 99) <= 49) {
@@ -170,34 +204,24 @@ function generatePlatform(scene, xPosition) {
         let tokenY = platformY - newPlatform.height / 2 - 25;
         tokens.create(tokenX, tokenY, 'token').setGravityY(-300);
         hasToken1 = true;
-        console.log(`Token (Type 1) created at (${tokenX}, ${tokenY}) - Below platform (50% chance)`);
-    } else {
-        console.log(`Token (Type 1) not spawned at (${xPosition}, ${platformY}) - 50% chance failed`);
     }
 
     if (tokens3.getChildren().length < maxVisibleTokens3 && Phaser.Math.Between(0, 99) <= 19 && !hasToken1) {
         let tokenX = xPosition + Phaser.Math.Between(-20, 20);
         let tokenY = platformY - newPlatform.height / 2 - 25;
         tokens3.create(tokenX, tokenY, 'token3').setGravityY(-300);
-        console.log(`Token (Type 3) created at (${tokenX}, ${tokenY}) - Below platform (20% chance)`);
-    } else {
-        console.log(`Token (Type 3) not spawned at (${xPosition}, ${platformY}) - 20% chance failed`);
     }
 
     if (tokens2.getChildren().length < maxVisibleTokens2 && Phaser.Math.Between(0, 1) === 0 && !hasToken1) {
         let tokenX = xPosition + Phaser.Math.Between(-20, 20);
         let tokenY = platformY - newPlatform.height / 2 - 25;
         tokens2.create(tokenX, tokenY, 'token2').setGravityY(-300);
-        console.log(`Token (Type 2) created at (${tokenX}, ${tokenY}) - Below platform (50% chance)`);
-    } else {
-        console.log(`Token (Type 2) not spawned at (${xPosition}, ${platformY}) - 50% chance failed`);
     }
 
     if (xPosition > lastPlatformX) {
         lastPlatformX = xPosition;
         lastPlatformY = platformY;
     }
-    console.log(`Placed ${selectedPlatform} at (${xPosition}, ${platformY})`);
 }
 
 function generateObstacle(scene) {
@@ -207,7 +231,6 @@ function generateObstacle(scene) {
     const obstacle = obstacles.create(obstacleX, startY, 'obstacle');
     obstacle.setVelocityY(isClimbing ? -150 : 150);
     obstacle.setGravityY(-300);
-    console.log(`Obstacle created at (${obstacleX}, ${startY}) - ${isClimbing ? 'Climbing' : 'Falling'}`);
 }
 
 function updateAnimations(scene, spriteKey) {
@@ -237,23 +260,19 @@ function updateAnimations(scene, spriteKey) {
         frameRate: 20,
         repeat: 7
     });
-    console.log(`Animations updated for sprite: ${spriteKey}`);
 }
 
 function collectToken(player, token, tokenType) {
     if (isHit) {
-        console.log('Token collection blocked: Character is in hit state (red).');
         return;
     }
 
     token.destroy();
     if (tokenType === 'token') {
         score += 1;
-        console.log('Token (Type 1) collected! +1 Con Coin. Total: ' + score);
         token1Sound.play();
     } else if (tokenType === 'token2') {
         score += 3;
-        console.log('Token (Type 2) collected! +3 Con Coins. Total: ' + score);
         token2Sound.play();
     } else if (tokenType === 'token3') {
         isInvincible = true;
@@ -264,7 +283,6 @@ function collectToken(player, token, tokenType) {
         if (isHit) {
             isHit = false;
             player.clearTint();
-            console.log('Cleared hit state and tint due to invincibility collection.');
         }
 
         if (selectedPlayer === 'paul') {
@@ -297,9 +315,7 @@ function collectToken(player, token, tokenType) {
 }
 
 function showMaxLivesMessage(scene) {
-    console.log('showMaxLivesMessage called, current maxLivesMessage:', maxLivesMessage);
     if (maxLivesMessage) {
-        console.log('Destroying existing maxLivesMessage');
         maxLivesMessage.destroy();
         maxLivesMessage = null;
     }
@@ -323,13 +339,42 @@ function showMaxLivesMessage(scene) {
         duration: 2000,
         ease: 'Power2',
         onComplete: () => {
-            console.log('Tween completed, maxLivesMessage state:', maxLivesMessage);
             if (maxLivesMessage) {
                 maxLivesMessage.destroy();
                 maxLivesMessage = null;
-                console.log('maxLivesMessage destroyed in onComplete');
-            } else {
-                console.log('maxLivesMessage was null during onComplete, skipping destroy');
+            }
+        }
+    });
+}
+
+function showLivesGainedMessage(scene) {
+    if (livesGainedMessage) {
+        livesGainedMessage.destroy();
+        livesGainedMessage = null;
+    }
+
+    livesGainedMessage = scene.add.text(config.width / 2, GAME_HEIGHT - 50, '+1 Lives', {
+        fontFamily: 'Arial',
+        fontSize: '28px',
+        fontStyle: 'bold',
+        fill: '#00ff00',
+        stroke: '#000000',
+        strokeThickness: 4
+    })
+        .setOrigin(0.5, 0.5)
+        .setScrollFactor(0)
+        .setDepth(HUD_DEPTH + 2)
+        .setAlpha(1);
+
+    scene.tweens.add({
+        targets: livesGainedMessage,
+        alpha: 0,
+        duration: 2000,
+        ease: 'Power2',
+        onComplete: () => {
+            if (livesGainedMessage) {
+                livesGainedMessage.destroy();
+                livesGainedMessage = null;
             }
         }
     });
@@ -337,10 +382,8 @@ function showMaxLivesMessage(scene) {
 
 function hitObstacle(player, obstacle) {
     const currentTime = Date.now();
-    console.log(`hitObstacle called for obstacle at (${obstacle.x}, ${obstacle.y}), hitCooldown: ${hitCooldown}, time since last hit: ${currentTime - lastHitTime}ms`);
 
     if (hitCooldown > 0 || (currentTime - lastHitTime < HIT_DEBOUNCE_WINDOW)) {
-        console.log('Hit blocked by cooldown or debounce');
         return;
     }
 
@@ -351,7 +394,6 @@ function hitObstacle(player, obstacle) {
     obstacle.setTexture('obstacle_hit');
     if (player.scene.anims.exists('obstacle_hit_anim')) {
         obstacle.anims.play('obstacle_hit_anim', true);
-        console.log('Playing obstacle_hit_anim');
     } else {
         console.error('obstacle_hit_anim not found. Available animations:', player.scene.anims.anims.keys());
         console.error('Forcing obstacle destruction due to missing animation.');
@@ -367,35 +409,30 @@ function hitObstacle(player, obstacle) {
     }
 
     if (isInvincible && isHit === false) {
-        console.log('Hit blocked by invincibility - attempting to gain a life');
         if (lives < MAX_LIVES) {
             lives = Math.min(MAX_LIVES, lives + 1);
             livesText.setText('Lives: ' + lives);
-            console.log(`Life gained due to invincibility. New total: ${lives}`);
+            showLivesGainedMessage(player.scene);
         } else {
-            console.log('Cannot gain life: Max lives reached');
             showMaxLivesMessage(player.scene);
         }
 
         obstacle.once('animationcomplete-obstacle_hit_anim', () => {
             obstacle.destroy();
-            console.log('Obstacle destroyed after animation (invincible hit)');
         });
         obstacleHitSound.play();
         isHit = false;
+
         return;
     }
 
-    console.log('Processing hit with obstacle.');
     isHit = true;
 
     score = Math.max(0, score - 1);
     scoreText.setText('Con Coins: ' + score);
-    console.log(`Con Coin deducted. New total: ${score}`);
 
     lives = Math.max(0, lives - 1);
     livesText.setText('Lives: ' + lives);
-    console.log(`Life deducted. New total: ${lives}`);
 
     player.anims.stop();
     player.anims.play('hit_animation', true);
@@ -403,7 +440,6 @@ function hitObstacle(player, obstacle) {
 
     obstacle.once('animationcomplete-obstacle_hit_anim', () => {
         obstacle.destroy();
-        console.log('Obstacle destroyed after animation.');
         player.once('animationcomplete-hit_animation', () => {
             isHit = false;
             player.clearTint();
@@ -412,7 +448,6 @@ function hitObstacle(player, obstacle) {
     });
 
     obstacleHitNormalSound.play();
-    console.log('Obstacle hit sound played.');
 
     if (lives <= 0) {
         console.log('Game Over Triggered: Lives depleted');
@@ -431,9 +466,7 @@ async function fetchGlobalLeaderboard() {
         });
         if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
         const data = await response.json();
-        console.log('Raw leaderboard data:', data);
         const leaderboard = data ? Object.values(data).sort((a, b) => b.score - a.score).slice(0, 10) : [];
-        console.log('Processed leaderboard:', leaderboard);
         return leaderboard;
     } catch (error) {
         console.error('Error fetching leaderboard:', error);
@@ -462,37 +495,87 @@ async function showGameOverScreen(scene) {
     gameStarted = false;
     scene.cameras.main.stopFollow();
 
+    // Clean up timers
     if (obstacleTimer) {
         obstacleTimer.remove();
         obstacleTimer = null;
-        console.log('Obstacle generation timer stopped.');
     }
 
+    // Destroy player and set to null
     if (player) {
         player.destroy();
         player = null;
-        console.log('Player (Geartickler/Kyle) destroyed.');
     }
+
+    // Destroy game objects
     tokens.getChildren().forEach(token => token.destroy());
     tokens.clear(true, true);
-    console.log('All Type 1 tokens destroyed.');
     tokens2.getChildren().forEach(token => token.destroy());
     tokens2.clear(true, true);
-    console.log('All Type 2 tokens destroyed.');
     tokens3.getChildren().forEach(token => token.destroy());
     tokens3.clear(true, true);
-    console.log('All Type 3 tokens destroyed.');
     obstacles.getChildren().forEach(obstacle => obstacle.destroy());
     obstacles.clear(true, true);
-    console.log('All obstacles destroyed.');
     platforms.getChildren().forEach(platform => platform.destroy());
     platforms.clear(true, true);
-    console.log('All platforms destroyed.');
 
-    if (gameplayMusic && gameplayMusic.isPlaying) {
-        gameplayMusic.stop();
-        console.log('Gameplay music stopped on game over screen.');
+    // Destroy HUD and its children (including buttons)
+    if (hud) {
+        hud.getChildren().forEach(child => {
+            // Remove event listeners from buttons
+            if (child === leftButton || child === rightButton) {
+                child.removeAllListeners();
+            }
+            child.destroy();
+        });
+        hud.clear(true, true);
+        hud = null;
+        leftButton = null;
+        rightButton = null;
+        scoreText = null;
+        livesText = null;
     }
+
+    // Destroy parallax backgrounds
+    if (bgFar) {
+        bgFar.destroy();
+        bgFar = null;
+    }
+    if (bgMid) {
+        bgMid.destroy();
+        bgMid = null;
+    }
+
+    // Stop audio
+    if (gameplayMusic) {
+        gameplayMusic.stop();
+        gameplayMusic.volume = 0.05;
+        console.log('Gameplay music stopped and volume reset on game over screen.');
+    }
+
+    if (invincibilitySound && invincibilitySound.isPlaying) {
+        invincibilitySound.stop();
+        console.log('Invincibility sound stopped on game over screen.');
+    }
+
+    // Reset input states
+    isClickingLeft = false;
+    isClickingRight = false;
+    cursors = null;
+
+    // Reset game state variables
+    isHit = false;
+    hitCooldown = 0;
+    lastHitTime = 0;
+    isInvincible = false;
+    invincibilityTimer = 0;
+    flashTimer = 0;
+    isFlashing = false;
+    currentSprite = null;
+    lastPlatformX = 0;
+    lastPlatformY = 0;
+    lastDirectionUp = false;
+    smoothedScrollX = 0;
 
     const cameraCenterX = scene.cameras.main.scrollX + config.width / 2;
     const cameraCenterY = scene.cameras.main.scrollY + GAME_HEIGHT / 2;
@@ -535,58 +618,56 @@ async function showGameOverScreen(scene) {
         });
 
     let leaderboard = await fetchGlobalLeaderboard();
-    let leaderboardTextObj = scene.add.text(cameraCenterX, cameraCenterY + 100, 
+    let leaderboardTextObj = scene.add.text(cameraCenterX, cameraCenterY + 120, 
         'Global Leaderboard:\n' + (leaderboard.length ? leaderboard.map((entry, index) => 
             `${index + 1}. ${entry.initials} - ${entry.score}`).join('\n') : 'No scores yet'), 
         { fontSize: '20px', fill: '#ffffff', align: 'center' })
         .setOrigin(0.5)
         .setDepth(11);
 
-    scene.add.text(cameraCenterX, cameraCenterY + 250, 'Start New Game', 
-        { fontSize: '36px', fill: '#ffffff', align: 'center' })
+    const startButton = scene.add.image(cameraCenterX, cameraCenterY + 300, 'button_start')
         .setOrigin(0.5)
+        .setDisplaySize(200, 80)
         .setInteractive()
         .setDepth(11)
         .on('pointerdown', () => {
             score = 0;
             lives = 3;
             scene.scene.restart();
-        });
+        })
+        .on('pointerover', () => startButton.setTint(0xcccccc))
+        .on('pointerout', () => startButton.clearTint());
 }
 
 function showExplanationScreen(scene) {
     console.log('Displaying explanation screen...');
 
-    // Clear existing elements from character selection
     scene.children.list.forEach(child => {
         if (child.type !== 'Text' || child.text === 'Con Coins: 0') {
             child.destroy();
         }
     });
 
-    // Add a semi-transparent background
     const background = scene.add.rectangle(config.width / 2, config.height / 2, config.width, config.height, 0x0e343c, 0.9)
         .setDepth(10);
 
-    // Add title
     const title = scene.add.text(config.width / 2, 100, 'How to Play', {
         fontSize: '48px',
         fill: '#ffffff',
         align: 'center'
     }).setOrigin(0.5).setDepth(11);
 
-    // Add instructions
     const instructions = scene.add.text(config.width / 2, 350, 
         'Objective: Get to ASOTU CON by collecting \n' + 
-	'Con Coins while avoiding industry buzzwords.\n\n' +
+        'Con Coins while avoiding industry buzzwords.\n\n' +
         '- Use the left and right buttons \n' +
-	'or arrow keys to move. \n' +
+        'or arrow keys to move. \n' +
         '-Con Coins are +1, +3 or grant Invincibility. \n' +
         '- Hitting buzzwords deducts 1 life and 1 Con Coin. \n' +
-        '- While invincible, buzzwords grant 1 life (up to 10).\n' +
+        '- While invincible, buzzwords grant 1 life (up to 5).\n' +
         '- You start with 3 lives.\n' +
         '- Game over if you run out of lives \n' +
-	'or you fall off the screen.\n\n' +
+        'or you fall off the screen.\n\n' +
         'Good luck on your journey to ASOTU CON!',
         {
             fontSize: '24px',
@@ -595,22 +676,21 @@ function showExplanationScreen(scene) {
             lineSpacing: 10
         }).setOrigin(0.5).setDepth(11);
 
-    // Add a "Start Game" button
-    const startButton = scene.add.text(config.width / 2, config.height - 100, 'Start Game', {
-        fontSize: '36px',
-        fill: '#ffffff',
-        align: 'center'
-    }).setOrigin(0.5).setInteractive().setDepth(11)
+    const startButton = scene.add.image(config.width / 2, config.height - 100, 'button_start')
+        .setOrigin(0.5)
+        .setDisplaySize(200, 80)
+        .setInteractive()
+        .setDepth(11)
         .on('pointerdown', () => {
             console.log('Starting game from explanation screen...');
-            // Destroy explanation screen elements
             background.destroy();
             title.destroy();
             instructions.destroy();
             startButton.destroy();
-            // Proceed to start the game
             startGame(scene);
-        });
+        })
+        .on('pointerover', () => startButton.setTint(0xcccccc))
+        .on('pointerout', () => startButton.clearTint());
 }
 
 function startGame(scene) {
@@ -623,6 +703,9 @@ function startGame(scene) {
     invincibilityTimer = 0;
     flashTimer = 0;
     isFlashing = false;
+    smoothedScrollX = 0; // Reset smoothed scroll position
+    isClickingLeft = false;
+    isClickingRight = false;
 
     if (startMusic && startMusic.isPlaying) {
         startMusic.stop();
@@ -656,13 +739,32 @@ function startGame(scene) {
         token2Sound = scene.sound.add('token2_sound', { volume: 0.1 });
     }
 
+    // Create parallax background layers
+    bgFar = scene.add.tileSprite(0, 0, config.width, GAME_HEIGHT, 'bg_far')
+        .setOrigin(0, 0)
+        .setDepth(-3)
+        .setScrollFactor(0)
+        .setAlpha(1)
+        .setVisible(true);
+    console.log(`bgFar created - depth: ${bgFar.depth}, alpha: ${bgFar.alpha}, width: ${bgFar.width}, height: ${bgFar.height}`);
+
+    bgMid = scene.add.tileSprite(0, 0, config.width, GAME_HEIGHT, 'bg_mid')
+        .setOrigin(0, 0)
+        .setDepth(-2)
+        .setScrollFactor(0)
+        .setAlpha(0.8)
+        .setVisible(true);
+    console.log(`bgMid created - depth: ${bgMid.depth}, alpha: ${bgMid.alpha}, width: ${bgMid.width}, height: ${bgMid.height}, texture: bg_mid`);
+
+    console.log('Creating player...');
     const playerSprite = selectedPlayer === 'paul' ? 'geartickler' : 'kyle';
     currentSprite = playerSprite;
     player = scene.physics.add.sprite(playerStartX, playerStartY, playerSprite);
-    player.setBounce(0.2);
+    player.setBounce(0);
     player.setCollideWorldBounds(false);
     player.setDepth(1);
     player.setScale(1);
+    console.log(`Player created at (${player.x}, ${player.y})`);
 
     scene.physics.world.setBounds(0, 0, WORLD_WIDTH, GAME_HEIGHT);
 
@@ -676,13 +778,13 @@ function startGame(scene) {
     tokens3 = scene.physics.add.group();
     obstacles = scene.physics.add.group();
 
-    console.log('Generating initial platforms...');
     generateInitialPlatforms(scene);
 
     cursors = scene.input.keyboard.createCursorKeys();
 
     scene.cameras.main.setBounds(0, 0, WORLD_WIDTH, GAME_HEIGHT);
     scene.cameras.main.startFollow(player, true, 0.1, 0.1);
+    console.log('Camera set up and following player.');
 
     updateAnimations(scene, currentSprite);
 
@@ -694,21 +796,62 @@ function startGame(scene) {
             frameRate: 10,
             repeat: 0
         });
-        console.log('Created obstacle_hit_anim animation successfully. Frames:', obstacleFrames, 'Available animations:', scene.anims.anims.keys());
     } else {
         console.error('Failed to generate frames for obstacle_hit_anim. Check obstacle_hit spritesheet.');
     }
 
+    console.log('Setting up platform collider...');
     scene.physics.add.collider(player, platforms, (player, platform) => {
-        if (player.body.touching.up) {
-            player.setVelocityY(-330);
-        } else if (player.body.touching.down) {
-            player.setVelocityY(-330);
-        } else if (player.body.touching.left || player.body.touching.right) {
-            player.setVelocityX(-player.body.velocity.x);
-            console.log(`Player collided with platform side at x: ${player.x}, platform x: ${platform.x}`);
+        try {
+            // Log the collision direction for debugging
+            console.log(`Collision detected - touching: down=${player.body.touching.down}, up=${player.body.touching.up}, left=${player.body.touching.left}, right=${player.body.touching.right}`);
+
+            // Apply jump velocity based on collision direction
+            if (player.body.touching.down || player.body.touching.up) {
+                player.setVelocityY(-330);
+            }
+
+            // Handle platform behavior based on collision direction
+            if (!isInvincible) {
+                if (player.body.touching.down) {
+                    // Player lands on top of the platform: use hitCount logic
+                    platform.hitCount = (platform.hitCount || 0) + 1;
+                    console.log(`Platform hit on top ${platform.hitCount} times at position (${platform.x}, ${platform.y})`);
+
+                    if (platform.hitCount >= 2) {
+                        let currentAlpha = platform.alpha || 1;
+                        currentAlpha -= 0.25;
+                        platform.setAlpha(currentAlpha);
+                        console.log(`Platform opacity reduced to ${currentAlpha}`);
+
+                        if (currentAlpha <= 0) {
+                            platform.destroy();
+                            console.log(`Platform destroyed at position (${platform.x}, ${platform.y}) due to opacity reaching 0`);
+                        }
+                    }
+                } else if (player.body.touching.left || player.body.touching.right || player.body.touching.up) {
+                    // Player hits the side or bottom of the platform: do nothing for now
+                    console.log(`Platform hit on side/bottom at position (${platform.x}, ${platform.y}) - no action taken`);
+                    // Optionally, add a penalty here (e.g., deduct a life or score)
+                    // Example: Deduct 1 life (but don't go below 0)
+                    // lives = Math.max(0, lives - 1);
+                    // livesText.setText('Lives: ' + lives);
+                    // console.log('Hit platform side/bottom - 1 life deducted');
+                    // if (lives <= 0) {
+                    //     console.log('Game Over Triggered: Lives depleted from side/bottom collision');
+                    //     setTimeout(() => {
+                    //         showGameOverScreen(player.scene);
+                    //     }, 100);
+                    // }
+                }
+            } else {
+                console.log(`Player is invincible - no platform action at position (${platform.x}, ${platform.y})`);
+            }
+        } catch (error) {
+            console.error('Error in platform collider callback:', error);
         }
     });
+    console.log('Platform collider set up.');
 
     scene.physics.add.overlap(player, tokens, (p, t) => collectToken(p, t, 'token'), null, scene);
     scene.physics.add.overlap(player, tokens2, (p, t) => collectToken(p, t, 'token2'), null, scene);
@@ -760,19 +903,15 @@ function startGame(scene) {
         .on('pointerdown', () => {
             isClickingLeft = true;
             isClickingRight = false;
-            console.log('Left button pressed at', Date.now());
         })
         .on('pointerup', () => {
             isClickingLeft = false;
-            console.log('Left button released at', Date.now());
         })
         .on('pointerout', () => {
             isClickingLeft = false;
-            console.log('Left button out at', Date.now());
         })
         .on('pointerupoutside', () => {
             isClickingLeft = false;
-            console.log('Left button up outside at', Date.now());
         });
     hud.add(leftButton);
 
@@ -786,31 +925,17 @@ function startGame(scene) {
         .on('pointerdown', () => {
             isClickingRight = true;
             isClickingLeft = false;
-            console.log('Right button pressed at', Date.now());
         })
         .on('pointerup', () => {
             isClickingRight = false;
-            console.log('Right button released at', Date.now());
         })
         .on('pointerout', () => {
             isClickingRight = false;
-            console.log('Right button out at', Date.now());
         })
         .on('pointerupoutside', () => {
             isClickingRight = false;
-            console.log('Right button up outside at', Date.now());
         });
     hud.add(rightButton);
-
-    scene.input.on('pointerdown', (pointer) => {
-        console.log('Global pointer down at', pointer.x, pointer.y, 'at', Date.now());
-    });
-    scene.input.on('pointerup', (pointer) => {
-        console.log('Global pointer up at', pointer.x, pointer.y, 'at', Date.now());
-    });
-    scene.input.on('pointermove', (pointer) => {
-        console.log('Pointer move at', pointer.x, pointer.y, 'at', Date.now());
-    });
 
     obstacleTimer = scene.time.addEvent({
         delay: 1500,
@@ -818,10 +943,57 @@ function startGame(scene) {
         callbackScope: scene,
         loop: true
     });
-}
 
+    console.log('startGame complete.');
+}
 async function create() {
-    console.log('Displaying player selection screen...');
+    console.log('Starting create...');
+
+    // Reset game state variables at the start of the scene
+    gameStarted = false;
+    score = 0;
+    lives = 3;
+    isHit = false;
+    hitCooldown = 0;
+    lastHitTime = 0;
+    selectedPlayer = null;
+    lastPlatformX = 0;
+    lastPlatformY = 0;
+    lastDirectionUp = false;
+    isClickingLeft = false;
+    isClickingRight = false;
+    isInvincible = false;
+    invincibilityTimer = 0;
+    flashTimer = 0;
+    isFlashing = false;
+    currentSprite = null;
+    player = null;
+    platforms = null;
+    tokens = null;
+    tokens2 = null;
+    tokens3 = null;
+    obstacles = null;
+    hud = null;
+    leftButton = null;
+    rightButton = null;
+    scoreText = null;
+    livesText = null;
+    cursors = null;
+    bgFar = null;
+    bgMid = null;
+    smoothedScrollX = 0;
+    obstacleTimer = null;
+
+    // Stop any existing audio
+    if (startMusic) {
+        startMusic.stop();
+    }
+    if (gameplayMusic) {
+        gameplayMusic.stop();
+    }
+    if (invincibilitySound) {
+        invincibilitySound.stop();
+    }
 
     startMusic = this.sound.add('start_music', { loop: true, volume: 0.05 });
     startMusic.play();
@@ -839,7 +1011,7 @@ async function create() {
             console.log('Selected Paul');
             paulPreview.setTint(0x00ff00);
             kylePreview.clearTint();
-            startButton.setStyle({ fill: '#ffffff' });
+            startButton.setAlpha(1);
         });
 
     this.add.text(300, 250, 'Paul', 
@@ -854,7 +1026,7 @@ async function create() {
             console.log('Selected Kyle');
             kylePreview.setTint(0x00ff00);
             paulPreview.clearTint();
-            startButton.setStyle({ fill: '#ffffff' });
+            startButton.setAlpha(1);
         });
 
     this.add.text(500, 250, 'Kyle', 
@@ -868,40 +1040,52 @@ async function create() {
         { fontSize: '16px', fill: '#ffffff', align: 'center' })
         .setOrigin(0.5);
 
-    const startButton = this.add.text(400, 350, 'Start Game', 
-        { fontSize: '36px', fill: '#666666', align: 'center' })
+    const startButton = this.add.image(400, 350, 'button_start')
         .setOrigin(0.5)
+        .setDisplaySize(200, 80)
         .setInteractive()
+        .setAlpha(0.5)
         .on('pointerdown', () => {
             if (selectedPlayer) {
-                // Instead of starting the game directly, show the explanation screen
                 paulPreview.destroy();
                 kylePreview.destroy();
                 startButton.destroy();
-                this.children.list.filter(child => child.type === 'Text' && child.text !== 'Con Coins: 0').forEach(child => child.destroy());
+                this.children.list.filter(child => child.type === 'Text' && child.text !== 'Con Coins: ' + score).forEach(child => child.destroy());
                 showExplanationScreen(this);
             } else {
                 console.log('Please select a player first!');
             }
-        });
+        })
+        .on('pointerover', () => {
+            if (selectedPlayer) startButton.setTint(0xcccccc);
+        })
+        .on('pointerout', () => startButton.clearTint());
+
+    console.log('create complete.');
 }
 
 function update() {
-    if (!gameStarted || !player) return;
+    if (!gameStarted || !player) {
+        return;
+    }
 
-    if (isHit) return;
+    // Removed: console.log(`Player position: (${player.x}, ${player.y})`);
+
+    if (isHit) {
+        // While the player is in the hit state, prevent movement
+        player.setVelocityX(0);
+        return;
+    }
 
     if (hitCooldown > 0) {
         hitCooldown -= this.game.loop.delta;
         if (hitCooldown <= 0) {
             hitCooldown = 0;
-            console.log('Hit cooldown expired.');
         }
     }
 
     if (isInvincible) {
         invincibilityTimer -= this.game.loop.delta;
-        console.log(`Invincibility timer: ${Math.round(invincibilityTimer / 1000)} seconds remaining, currentSprite: ${currentSprite}`);
 
         if (invincibilityTimer > FLASH_START_TIME) {
             const invincibleSprite = selectedPlayer === 'paul' ? 'geartickler_invincible' : 'kyle_invincible';
@@ -910,7 +1094,6 @@ function update() {
                 player.setTexture(currentSprite);
                 updateAnimations(this, currentSprite);
                 player.setScale(1.5);
-                console.log(`Forced sprite to invincible: ${currentSprite}`);
             }
         }
 
@@ -950,7 +1133,6 @@ function update() {
                 player.setTexture(currentSprite);
                 player.setScale(currentSprite.includes('invincible') ? 1.5 : 1);
                 updateAnimations(this, currentSprite);
-                console.log(`Flashing: Switched to ${currentSprite} with ${Math.round(invincibilityTimer / 1000)} seconds remaining.`);
             }
         }
     }
@@ -960,23 +1142,18 @@ function update() {
         player.setVelocityX(-160);
         if (currentAnimation !== 'move_left') {
             player.anims.play('move_left', true);
-            console.log(`Playing move_left animation with sprite: ${currentSprite}`);
         }
     } else if ((cursors && cursors.right.isDown) || isClickingRight) {
         player.setVelocityX(160);
         if (currentAnimation !== 'move_right') {
             player.anims.play('move_right', true);
-            console.log(`Playing move_right animation with sprite: ${currentSprite}`);
         }
     } else {
         player.setVelocityX(0);
         if (currentAnimation !== 'idle') {
             player.anims.play('idle', true);
-            console.log(`Playing idle animation with sprite: ${currentSprite}`);
         }
     }
-
-    console.log(`Player x: ${player.x}, Camera scrollX: ${this.cameras.main.scrollX}, World bounds: ${this.physics.world.bounds.width}`);
 
     if (player.y > GAME_HEIGHT) {
         console.log('Game Over Triggered: Player fell below visible screen');
@@ -988,41 +1165,48 @@ function update() {
     if (player.x > lastPlatformX - config.width * 2) {
         const newPlatformX = lastPlatformX + Phaser.Math.Between(minPlatformSpacingX, maxPlatformSpacingX);
         generatePlatform(this, newPlatformX);
-        console.log(`Generated new platform at (${newPlatformX}, ${lastPlatformY})`);
+    }
+
+    const cameraScrollX = this.cameras.main.scrollX;
+
+    // Smooth the scroll position for parallax
+    smoothedScrollX += (cameraScrollX - smoothedScrollX) * PARALLAX_SMOOTHING;
+
+    // Update parallax background positions using the smoothed scroll value
+    if (bgFar) {
+        bgFar.tilePositionX = smoothedScrollX * BG_FAR_SCROLL_FACTOR;
+    }
+    if (bgMid) {
+        bgMid.tilePositionX = (smoothedScrollX * BG_MID_SCROLL_FACTOR) % MIDGROUND_IMAGE_WIDTH;
     }
 
     platforms.getChildren().forEach(platform => {
         if (platform.x < this.cameras.main.scrollX - config.width * 1.5) {
             platform.destroy();
-            console.log(`Destroyed platform at ${platform.x}`);
         }
     });
 
     obstacles.getChildren().forEach(obstacle => {
         if (obstacle.y < -50 || obstacle.y > GAME_HEIGHT + 50) {
             obstacle.destroy();
-            console.log(`Obstacle destroyed at (${obstacle.x}, ${obstacle.y}) - Out of bounds`);
         }
     });
 
     tokens.getChildren().forEach(token => {
         if (token.x < this.cameras.main.scrollX - config.width * 1.5) {
             token.destroy();
-            console.log(`Token (Type 1) destroyed at (${token.x}, ${token.y}) - Out of bounds`);
         }
     });
 
     tokens2.getChildren().forEach(token => {
         if (token.x < this.cameras.main.scrollX - config.width * 1.5) {
             token.destroy();
-            console.log(`Token (Type 2) destroyed at (${token.x}, ${token.y}) - Out of bounds`);
         }
     });
 
     tokens3.getChildren().forEach(token => {
         if (token.x < this.cameras.main.scrollX - config.width * 1.5) {
             token.destroy();
-            console.log(`Token (Type 3) destroyed at (${token.x}, ${token.y}) - Out of bounds`);
         }
     });
 }
